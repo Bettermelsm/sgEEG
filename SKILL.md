@@ -9,11 +9,11 @@ description: >-
 license: Internal
 compatibility: Windows / Python 3.10+；adi-reader、numpy、pandas、scipy、matplotlib
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   status: "STABLE"
   owner: "sea"
   created: "2026-09-30"
-  last_updated: "2026-09-30"
+  last_updated: "2026-10-05"
   risk_level: "low"
   visibility: "internal"
   triggers: "LabChart, adicht, ADInstruments, EEG, EMG, LTP, 诱发电位, 电生理, 频段功率, PSD"
@@ -119,6 +119,28 @@ def compute_snr(sig, stims, t, pre_win=1.0, post_win=2.0)    # 各试次 post/pr
 
 另有 Rmd 变体（`SGA*_report.Rmd` → HTML），需要叙述性结论时用 Rmd；纯图表汇总用 step3。
 
+## Step 2b — 进阶分析（SCI 扩展，V1.1.0 新增）
+
+`step2b_advanced.py`，与 step2 共用 `extracted/` 输入，输出到 `plots_adv/`：
+
+| 图 | 内容 | 方法学定位 |
+|---|---|---|
+| A1 | 刺激伪迹去除（±5ms 线性插值）+ 逐 trial QC（>5σ 或 flat 剔除）后的锁定平均 | 审稿人要求的质控证据 |
+| A2 | fPSP 斜率（10–90% 上升相线性拟合）逐 trial + 前后半 Cohen's d + MAD 离群剔除 | LTP 定量金标准 |
+| A3 | Morlet 小波时频（2–100 Hz 对数轴，纯 numpy FFT 实现，无 pywt 依赖）+ 刺激锁定 ERSP（vs 刺激前 1s 基线，±6 dB） | 时频维度，LTP 文章标配 |
+| A4 | CV 滑动窗时间 course + CV⁻² vs 幅值散点 | 突触释放概率间接推断 |
+| A5 | 五频段功率前半 vs 后半配对比较 + Cohen's d | 组内效应量 |
+
+### 20260630 实测结论（重要，决定数据可用性判断）
+
+- **fPSP 斜率在这批数据上不可用**：A1 显示刺激后均值轨迹平坦，无可辨认诱发电位
+  波形 → A2 的斜率数值是噪声拟合，不可作为论文指标。原因可能：marker 通道检测的
+  刺激时刻与真实刺激不对齐、刺激强度不足、或记录电极位置不在传导通路上。
+- **ERSP 有真信号**：Rat8 Rec7 刺激后 0–1s 出现 4–10 Hz theta 功率 +4~6 dB 锁定
+  增强；Rat8-S2/Rat29 各 record 弱或无。这是目前这批数据最可发表的维度。
+- 结论：这批数据可支撑"刺激诱发 theta 频段功率增强"的初步结果，不足以支撑
+  经典 fPSP-slope LTP 叙事；补实验时需核对刺激-记录通道配置（见踩坑 12）。
+
 ## 踩坑清单（务必先读）
 
 1. **rec_idx 从 1 开始**（`ch.get_data(1)` 是第一个 record），但 `ch.fs`/`ch.units` 数组是 **0-indexed**，必须 `ch.fs[rec_idx - 1]`
@@ -132,6 +154,11 @@ def compute_snr(sig, stims, t, pre_win=1.0, post_win=2.0)    # 各试次 post/pr
 9. **诱发电位对齐**：片段截取要求 ≥90% 目标长度（`mask.sum() >= target_len*0.9`），防止 record 末尾刺激产生截断 trial 拉偏均值
 10. **LABChart 文件名带空格**（如 `LTP6_29 SD.adicht`）：Windows 下没问题，但传 Linux 服务器前建议重命名去空格
 11. **EMG 通道**：采样率往往远低于 EEG（实战 100 Hz vs 1000 Hz），跨通道对齐用各自的时间轴，不要用样本索引
+12. **fPSP 定量前必须先看 A1 平均波形**：若刺激后均值平坦（无 EP 波形），斜率拟合产出的是噪声——先用 A1 目检，再做 A2（实战教训：marker 时刻与真实刺激不对齐时全盘皆错）
+13. **Morlet CWT 用复小波 → 必须 np.fft.fft 全复数卷积**（`rfft` 不接受复输入）；FFT 长度要 pad 到 `n + 最长小波长度`（最低频小波可达 ~4s），否则循环卷积绕回污染结果
+14. **fPSP 斜率必须做 MAD 离群剔除 + 符号定向**（`|slope-med| < 3×1.4826×MAD`），否则个别伪迹 trial 把 std 抬到 10 万量级；同时斜率窗口（2–20ms）可能落在伪迹尾上，需目检
+15. **GBK 控制台**：Windows 中文终端打印 ±/↑/↓/✓ 会 UnicodeEncodeError，脚本内避免或设 `PYTHONIOENCODING=utf-8`；写文件用 `encoding='utf-8'`
+16. **numpy≥2.0 无 `np.trapz`**：用 `np.trapezoid`
 
 ## 已验证批次
 

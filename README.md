@@ -17,6 +17,8 @@ step3_html_report.py  → 自包含 HTML 报告（图片 base64 内嵌）
 - LTP/LTD 分析：各试次 post/pre RMS 比值 + 趋势判定
 - 跨动物/跨批次对比
 - 8 张标准图 + 定量文本汇总 + 单文件 HTML 报告
+- **进阶（step2b）**：刺激伪迹去除、trial 质控、fPSP 斜率（10–90% 拟合 + MAD 稳健剔除）、
+  Morlet 小波时频 + 刺激锁定 ERSP、CV 突触释放概率分析、Cohen's d 效应量
 
 ## 安装
 
